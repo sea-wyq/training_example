@@ -1,0 +1,110 @@
+apiVersion: v1
+data:
+  hostfile: |
+    mpi-job-master-0 slots=1
+    mpi-job-worker-0 slots=1
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: hostfile
+---
+
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: mpi-job
+spec:
+  minAvailable: 2
+  schedulerName: volcano
+  plugins:
+    ssh: [] 
+    svc: []
+  tasks:
+    - replicas: 1
+      name: master
+      template:
+        spec:
+          volumes:
+          - name: config-volume
+            configMap:
+              name: hostfile
+          containers:
+            - command:
+                - /bin/bash
+                - -c
+                - |
+                  mkdir -p /var/run/sshd; /usr/sbin/sshd;
+                  deepspeed --hostfile=/etc/config/hostfile train.py --deepspeed_config=ds_config.json -p 2 --steps=200
+              image: registry.cnbita.com:5000/wuyiqiang/deepspeed-alexnet:v1
+              name: master
+              resources:
+                limits:
+                  nvidia.com/nvidia-rtx-3090: 1
+              ports:
+                - containerPort: 22
+                  name: mpijob-port
+              volumeMounts:
+              - name: config-volume
+                mountPath: /etc/config
+          restartPolicy: Never
+    - replicas: 1
+      name: worker
+      template:
+        spec:
+          containers:
+            - command:
+                - /bin/bash
+                - -c
+                - |
+                  mkdir -p /var/run/sshd; /usr/sbin/sshd -D;
+              image: registry.cnbita.com:5000/wuyiqiang/deepspeed-alexnet:v1
+              name: worker
+              resources:
+                limits:
+                  nvidia.com/nvidia-rtx-3090: 1
+              ports:
+                - containerPort: 22
+                  name: mpijob-port
+          restartPolicy: Never
+
+# 双节点单计算卡
+---
+
+apiVersion: scheduling.volcano.sh/v1beta1
+kind: Queue
+metadata:
+  name: deepspeed
+spec:
+  reclaimable: true
+  weight: 1
+  capability:
+    nvidia.com/nvidia-rtx-3090: 2
+---
+
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: mpi-job
+spec:
+  minAvailable: 1
+  queue: deepspeed
+  schedulerName: volcano
+  tasks:
+    - replicas: 1
+      name: mpiworker
+      template:
+        spec:
+          containers:
+            - command:
+                - /bin/bash
+                - -c
+                - |
+                  sleep 3600s
+              image: registry.cnbita.com:5000/wuyiqiang/deepspeed-alexnet:v1
+              name: mpiworker
+              resources:
+                limits:
+                  nvidia.com/nvidia-rtx-3090: 2
+          restartPolicy: OnFailure
+
+# 单节点双计算卡

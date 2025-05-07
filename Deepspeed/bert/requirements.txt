@@ -1,0 +1,9 @@
+datasets
+transformers==4.35.2
+fire
+pytz
+loguru
+sh
+pytest
+tqdm
+tensorboard

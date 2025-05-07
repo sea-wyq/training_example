@@ -1,0 +1,42 @@
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: llm2
+spec:
+  minAvailable: 1
+  schedulerName: volcano
+  plugins:
+    ssh: []
+  tasks:
+    - replicas: 1
+      name: worker
+      template:
+        spec:
+          containers:
+            - command:
+                - sh
+                - -c
+                - python finetuning.py --use_peft --peft_method lora --quantization --use_fp16 --model_name /models/huggingface/meta-llama/Llama-2-7b-hf --output_dir /root/yangpengcheng/PEFT/model --batch_size_training 1
+              image: registry.cnbita.com:5000/yangpengcheng/llama-recipes:v0.1 
+              volumeMounts: 
+              - name: llama-recipes 
+                mountPath: /root/llama-recipes 
+              - name: llama-model 
+                mountPath: /models/huggingface/meta-llama/Llama-2-7b-hf 
+              - name: llama-dataset 
+                mountPath: /datasets/huggingface/samsum 
+              name: worker
+              resources:
+                limits:
+                  nvidia.com/nvidia-rtx-3090: 1
+          restartPolicy: OnFailure
+          volumes:
+          - name: llama-recipes 
+            hostPath: 
+              path: /leinaostorage/bitahub-dev/projects/vne0a5ca25ae7e4648a572939c6c2c049f/llms/llama-recipes 
+          - name: llama-model 
+            hostPath: 
+              path: /leinaostorage/bitahub-dev/models/vne0a5ca25ae7e4648a572939c6c2c049f/huggingface/meta-llama/Llama-2-7b-hf 
+          - name: llama-dataset 
+            hostPath: 
+              path: /leinaostorage/bitahub-dev/datasets/vne0a5ca25ae7e4648a572939c6c2c049f/huggingface/samsum

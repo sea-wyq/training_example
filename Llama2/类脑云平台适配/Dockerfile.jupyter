@@ -1,0 +1,3 @@
+FROM registry.cnbita.com:5000/wuyiqiang/python3.8_cuda11.8_pytorch2.3.0_llama2:v1
+
+RUN pip install notebook

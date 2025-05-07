@@ -1,0 +1,19 @@
+apiVersion: system.hero.ai/v1alpha1
+kind: TrainingJob
+metadata:
+  name: "s123456"
+  namespace: heros-user
+  labels:
+    app: colossalai
+spec:
+  imageUrl: registry.cnbita.com:5000/wuyiqiang/python3.9_cuda11.3_colossalai:v1
+  resourcePool: default
+  plugins: 
+  - colossalai
+  tasks:
+  - name: "s1"
+    minAvaluable: 1
+    replicas: 1
+    command: colossalai run --nproc_per_node 1  train.py -c ./ckpt-fp32
+    resource:
+      nvidia.com/nvidia-rtx-3090: 1

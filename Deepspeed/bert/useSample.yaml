@@ -1,0 +1,126 @@
+apiVersion: v1
+data:
+  hostfile: |
+    mpi-job-master-0 slots=1
+    mpi-job-worker-0 slots=1
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: hostfile
+---
+
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: mpi-job
+spec:
+  minAvailable: 2
+  schedulerName: volcano
+  plugins:
+    ssh: [] 
+    svc: []
+  tasks:
+    - replicas: 1
+      name: master
+      template:
+        spec:
+          volumes:
+          - name: config-volume
+            configMap:
+              name: hostfile
+          containers:
+            - command:
+                - /bin/bash
+                - -c
+                - |
+                  mkdir -p /var/run/sshd; /usr/sbin/sshd;
+                  deepspeed --hostfile=/etc/config/hostfile bert_dp-elastic.py --checkpoint_dir . --num_layers 3 --h_dim 4096
+              image: registry.cnbita.com:5000/wuyiqiang/deepspeed_bert:v1
+              name: master
+              resources:
+                limits:
+                  nvidia.com/nvidia-rtx-3090: 1
+              ports:
+                - containerPort: 22
+                  name: mpijob-port
+              volumeMounts:
+              - name: config-volume
+                mountPath: /etc/config
+          restartPolicy: Never
+    - replicas: 1
+      name: worker
+      template:
+        spec:
+          containers:
+            - command:
+                - /bin/bash
+                - -c
+                - |
+                  mkdir -p /var/run/sshd; /usr/sbin/sshd -D;
+              image: registry.cnbita.com:5000/wuyiqiang/deepspeed_bert:v1
+              name: worker
+              resources:
+                limits:
+                  nvidia.com/nvidia-rtx-3090: 1
+              ports:
+                - containerPort: 22
+                  name: mpijob-port
+          restartPolicy: Never
+
+
+# 测试pod   双机单卡
+# kubectl exec -it mpi-job-mpimaster-0 -- bash
+# cat /root/.ssh/config
+# ssh mpi-job-master
+
+---
+
+apiVersion: scheduling.volcano.sh/v1beta1
+kind: Queue
+metadata:
+  name: deepspeed
+spec:
+  reclaimable: true
+  weight: 1
+  capability:
+    cpu: "4"
+    memory: "16Gi"
+    nvidia.com/nvidia-rtx-3090: 8
+---
+
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: mpi-job
+spec:
+  minAvailable: 1
+  queue: deepspeed
+  schedulerName: volcano
+  tasks:
+    - replicas: 1
+      name: mpiworker
+      template:
+        spec:
+          containers:
+            - command:
+                - /bin/bash
+                - -c
+                - |
+                  deepspeed --include localhost:0 bert_dp.py --checkpoint_dir . --num_layers 3 --h_dim 4096
+              image: registry.cnbita.com:5000/wuyiqiang/deepspeed_bert:v1
+              name: mpiworker
+              resources:
+                limits:
+                  nvidia.com/nvidia-rtx-3090: 1
+          restartPolicy: OnFailure
+
+# 可执行
+# 单机单卡 deepspeed --include localhost:0 bert_dp.py --checkpoint_dir . --num_layers 3 --h_dim 4096
+# nvidia.com/nvidia-rtx-3090: 1
+
+# 单机多卡 deepspeed --include localhost:0,1 bert_dp.py --checkpoint_dir . --num_layers 3 --h_dim 4096 
+# nvidia.com/nvidia-rtx-3090: 2
+
+# 单机多卡训练需要添加下面环境变量
+# export  NCCL_SHM_DISABLE=1; export NCCL_SOCKET_IFNAME=eth0; export NCCL_IB_DISABLE=1; export NCCL_P2P_DISABLE=1; NCCL_DEBUG=INFO
+

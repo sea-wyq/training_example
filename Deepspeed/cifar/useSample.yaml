@@ -1,0 +1,24 @@
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: mpi-job
+spec:
+  minAvailable: 1
+  schedulerName: volcano
+  tasks:
+    - replicas: 1
+      name: mpiworker
+      template:
+        spec:
+          containers:
+            - command:
+                - /bin/bash
+                - -c
+                - |
+                  deepspeed --include localhost:0 /app/cifar10-dp.py
+              image: registry.cnbita.com:5000/deepspeed/cifar-dp-ssh:1.0.5
+              name: mpiworker
+              resources:
+                limits:
+                  nvidia.com/nvidia-rtx-3090: 1
+          restartPolicy: OnFailure

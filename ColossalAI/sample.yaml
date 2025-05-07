@@ -1,0 +1,206 @@
+apiVersion: v1
+data:
+  hostfile: |
+    trainingjob-m123456-m1-0 
+    trainingjob-m123456-m2-0 
+kind: ConfigMap
+metadata:
+  name: trainingjob-m123456-colossalai-hostfile-configmap
+---
+
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  labels:
+    hero.ai/kind: TrainingJob
+    system.hero.ai/job-name: m123456
+    system.hero.ai/job-namespace: default
+    vendor: job.hero.ai
+  name: trainingjob-m123456
+  namespace: default
+spec:
+  maxRetry: 3
+  minAvailable: 2
+  plugins:
+    env: []
+    ssh: []
+    svc: []
+  policies:
+  - action: CompleteJob
+    event: TaskCompleted
+  - action: TerminateJob
+    event: TaskFailed
+  queue: default
+  schedulerName: volcano
+  tasks:
+  - maxRetry: 3
+    minAvailable: 1
+    name: m1
+    replicas: 1
+    template:
+      metadata:
+        annotations:
+          leinao.ai/storage-managed: "true"
+          volcano.sh/task-topology-affinity: m1,m2
+          volcano.sh/task-topology-task-order: m1,m2
+        labels:
+          app: colossalai
+          fuse.serverful.fluid.io/inject: "true"
+          resourcepool.system.hero.ai: default
+          system.hero.ai/job-name: m123456
+          system.hero.ai/job-namespace: default
+      spec:
+        containers:
+        - command:
+          - sh
+          - -c
+          - |
+            sleep 10s; 
+            sh /app/getIP.sh trainingjob-m123456 default svc.cluster.local;
+            mkdir -p /var/run/sshd; /usr/sbin/sshd;
+            colossalai run --nproc_per_node 1 --hostfile /etc/colossalai/hostfile train.py -c ./ckpt-fp32;
+          env:
+          - name: CURRENT_VC_TASK_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['volcano.sh/task-spec']
+          - name: VC_TASK_NAMES
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.annotations['volcano.sh/task-topology-task-order']
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: TZ
+            value: Asia/Shanghai
+          image: registry.cnbita.com:5000/wuyiqiang/python3.9_cuda11.3_colossalai:v2
+          imagePullPolicy: Always
+          name: main
+          ports:
+          - containerPort: 22
+            name: ssh-port
+            protocol: TCP
+          resources:
+            limits:
+              nvidia.com/nvidia-rtx-3090: "1"
+            requests:
+              nvidia.com/nvidia-rtx-3090: "1"
+          volumeMounts:
+          - mountPath: /etc/timezone
+            name: mount-timezone
+            readOnly: true
+          - mountPath: /etc/localtime
+            name: mount-localtime
+            readOnly: true
+          - mountPath: /usr/share/zoneinfo/Asia/Shanghai
+            name: mount-localtime
+            readOnly: true
+          - mountPath: /dev/shm
+            name: mount-share-memory
+          - mountPath: /etc/colossalai
+            name: hostfile
+        nodeSelector:
+          node-role.kubernetes.io/training: "true"
+          resourcepool.system.hero.ai: default
+        restartPolicy: Never
+        shareProcessNamespace: true
+        volumes:
+        - emptyDir:
+            medium: Memory
+            sizeLimit: "0"
+          name: mount-share-memory
+        - hostPath:
+            path: /etc/localtime
+          name: mount-localtime
+        - hostPath:
+            path: /etc/timezone
+          name: mount-timezone
+        - configMap:
+            name: trainingjob-m123456-colossalai-hostfile-configmap
+          name: hostfile
+  - maxRetry: 3
+    minAvailable: 1
+    name: m2
+    replicas: 1
+    template:
+      metadata:
+        annotations:
+          leinao.ai/storage-managed: "true"
+          volcano.sh/task-topology-affinity: m1,m2
+          volcano.sh/task-topology-task-order: m1,m2
+        labels:
+          app: colossalai
+          fuse.serverful.fluid.io/inject: "true"
+          resourcepool.system.hero.ai: default
+          system.hero.ai/job-name: m123456
+          system.hero.ai/job-namespace: default
+      spec:
+        containers:
+        - command:
+          - sh
+          - -c
+          -  |
+            sleep 10s; 
+            sh /app/getIP.sh trainingjob-m123456 default svc.cluster.local;
+            mkdir -p /var/run/sshd; /usr/sbin/sshd -D;
+          env:
+          - name: CURRENT_VC_TASK_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['volcano.sh/task-spec']
+          - name: VC_TASK_NAMES
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.annotations['volcano.sh/task-topology-task-order']
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: TZ
+            value: Asia/Shanghai
+          image: registry.cnbita.com:5000/wuyiqiang/python3.9_cuda11.3_colossalai:v2
+          imagePullPolicy: Always
+          name: main
+          ports:
+          - containerPort: 22
+            name: ssh-port
+            protocol: TCP
+          resources:
+            limits:
+              nvidia.com/nvidia-rtx-3090: "1"
+            requests:
+              nvidia.com/nvidia-rtx-3090: "1"
+          volumeMounts:
+          - mountPath: /etc/timezone
+            name: mount-timezone
+            readOnly: true
+          - mountPath: /etc/localtime
+            name: mount-localtime
+            readOnly: true
+          - mountPath: /usr/share/zoneinfo/Asia/Shanghai
+            name: mount-localtime
+            readOnly: true
+          - mountPath: /dev/shm
+            name: mount-share-memory
+          - mountPath: /etc/colossalai
+            name: hostfile
+        nodeSelector:
+          node-role.kubernetes.io/training: "true"
+          resourcepool.system.hero.ai: default
+        restartPolicy: Never
+        shareProcessNamespace: true
+        volumes:
+        - emptyDir:
+            medium: Memory
+            sizeLimit: "0"
+          name: mount-share-memory
+        - hostPath:
+            path: /etc/localtime
+          name: mount-localtime
+        - hostPath:
+            path: /etc/timezone
+          name: mount-timezone
+        - configMap:
+            name: trainingjob-m123456-colossalai-hostfile-configmap
+          name: hostfile
