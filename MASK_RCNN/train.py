@@ -7,6 +7,7 @@ import os
 import torch
 import utils
 import sys
+import torchvision
 from torchvision.io import read_image
 from torchvision.ops.boxes import masks_to_boxes
 from torchvision import tv_tensors
@@ -75,8 +76,8 @@ class PennFudanDataset(torch.utils.data.Dataset):
 
 
 def get_model_instance_segmentation(num_classes):
-    # model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights="DEFAULT")
-    model = torch.load("/input/mask_rcnn/MASK_RCNN/model/maskrcnn.pth",map_location=torch.device('cpu'))
+    model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights="DEFAULT")
+    # model = torch.load("/input/mask_rcnn/MASK_RCNN/model/maskrcnn.pth",map_location=torch.device('cpu'))
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
     in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
@@ -102,10 +103,11 @@ def get_transform(train):
 if __name__ == "__main__":
     sys.stdout.flush()
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    print(device)
     num_classes = 2
     num_epochs = 1
-    dataset = PennFudanDataset("/input/mask_rcnn/MASK_RCNN/data/PennFudanPed", get_transform(train=True))
-    dataset_test = PennFudanDataset("/input/mask_rcnn/MASK_RCNN/data/PennFudanPed", get_transform(train=False))
+    dataset = PennFudanDataset("/home/training_example//MASK_RCNN/data/PennFudanPed", get_transform(train=True))
+    dataset_test = PennFudanDataset("/home/training_example/MASK_RCNN/data/PennFudanPed", get_transform(train=False))
 
     # split the dataset in train and test set
     indices = torch.randperm(len(dataset)).tolist()

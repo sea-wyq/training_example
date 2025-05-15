@@ -15,7 +15,6 @@ from colossalai.booster.plugin import GeminiPlugin, LowLevelZeroPlugin, TorchDDP
 from colossalai.booster.plugin.dp_plugin_base import DPPluginBase
 from colossalai.cluster import DistCoordinator
 from colossalai.nn.optimizer import HybridAdam
-from colossalai.utils import get_current_device
 
 NUM_EPOCHS = 80
 LEARNING_RATE = 1e-3
